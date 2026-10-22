@@ -1,84 +1,43 @@
-# Lehigh OpenAlex research discovery demo
+# Lehigh Research Discovery
 
-The collector asks the public OpenAlex API for works associated with Lehigh University (`I186143895`), sorts them by publication date, removes repeated DOI or OpenAlex IDs, and writes 20 records to a local CSV. The collector and local demo use only Python's standard library; the deployable app adds Streamlit. None uses a university login or Google Sheets.
+A Streamlit prototype for exploring scholarly works associated with Lehigh University in [OpenAlex](https://openalex.org/). It offers a simple way to browse publication metadata, move backward through older records, and export a collection for further review.
 
-## Streamlit app (local or cloud)
+**Live demo:** [Open the research discovery app](https://openalex-simple-poc-mdr6cd3sshezxcsnhs7xvv.streamlit.app/)
 
-Install the app dependency and launch it from this folder:
+## What the app does
+
+The app starts with 20 bundled publications. From there, a visitor can:
+
+- Click **Get next 20 older publications** to add up to 20 works from OpenAlex.
+- Sort the table by any column and filter by work type, topic, subfield, field, or domain.
+- Open a publication's OpenAlex record by clicking its title.
+- Download all collected records as a CSV file for review in Excel or another spreadsheet tool.
+
+Added publications are saved in the visitor's browser, so the collection remains available after a reload or a return visit in the same browser. Each browser has its own collection; the app does not store visitors' lists on the server. The CSV download is a portable copy that can be shared separately.
+
+## Data and selection method
+
+The bundled `publications.csv` supplies the initial 20 records. For subsequent batches, the app queries the public [OpenAlex Works API](https://help.openalex.org/api/) for works that OpenAlex associates with Lehigh University (`I186143895`). Results are requested in descending publication-date order, dated **on or before the oldest date already saved**. Including that date prevents works published on the same day from being skipped.
+
+The app checks each candidate against the saved OpenAlex IDs and normalized DOIs, skips matches, and adds up to 20 unseen works. Topic, subfield, field, and domain come from OpenAlex's `primary_topic` classification. These labels are automatically assigned, and the collection may include articles, reviews, datasets, and other work types. The prototype is intended for discovery and review, not as a vetted list of research opportunities.
+
+## Run locally
+
+With Python 3.10 or newer installed, run:
 
 ```bash
 python3 -m pip install -r requirements.txt
 python3 -m streamlit run streamlit_app.py
 ```
 
-The app starts with the 20 bundled records in `publications.csv`. It shows the total and a table numbered from 1 through the current count. Use the arrow in any column heading to sort, and click it again to reverse the order. Click **Type**, **Topic**, **Subfield**, **Field**, or **Domain** to open a dropdown filter; filters can be combined, and **Clear filters** restores the full table. The four classification columns come from each work's `primary_topic` in OpenAlex. Publication titles link to their OpenAlex pages. **Get next 20 older publications** fetches up to 20 unseen OpenAlex works dated on or before the oldest saved date, excluding matches by either OpenAlex ID or DOI. The app saves added works in that browser's local storage, so reloading the page or reopening the link in the same browser restores the growing list. Browser storage is separate for each browser and device, and clearing site data removes it. **Download CSV** exports the entire current list for a portable copy. The app does not write results to the server's filesystem.
+Fetching new records requires an internet connection. The original local demonstration is also available with `python3 demo.py --open`; it stores its growing list in a separate `demo_publications.csv` file.
 
-To deploy on [Streamlit Community Cloud](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy), put `streamlit_app.py`, `collector.py`, `publications.csv`, and `requirements.txt` in the same GitHub repository. In Community Cloud, create an app from that repository and branch, and select `streamlit_app.py` as the entrypoint. The bundled CSV supplies the initial rows; clicking the button needs internet access to OpenAlex. No university account, Google Sheet, or server-side CSV storage is needed.
+## Tests and deployment
 
-Run all focused tests, including the Streamlit app's data logic, with:
-
-```bash
-python3 -m unittest -v
-```
-
-The app data tests use mocked OpenAlex responses, so they do not require a network connection or a running Streamlit server.
-
-## Show the button demo
-
-In the Codex terminal, change into this folder and run:
+Run the test suite with:
 
 ```bash
-python3 demo.py --open
+python3 -m unittest discover -v
 ```
 
-Your browser opens `http://127.0.0.1:8765`. It starts with the 20 publications already collected. Click **Get next 20 older publications** to add 20 works on or before the oldest saved date. The page shows the growing count and marks the new rows. Click again to continue backward. **Download CSV** saves the full collection. Stop the server with Control-C in the terminal.
-
-The demo stores its growing list in `demo_publications.csv`. It copies the original `publications.csv` on first launch and leaves that original file alone. If you want to rehearse from the original 20 again, stop the server, delete only `demo_publications.csv`, and restart. It listens on your computer only; an internet connection is needed when you click the fetch button.
-
-For the meeting, start the demo before your professor arrives and leave the page open. The button makes a live OpenAlex request, so allow a few seconds for it to finish. If the network fails, the page shows the error and keeps the existing CSV intact.
-
-## Run it
-
-Open this folder in Codex, then run these commands in its terminal:
-
-```bash
-python3 --version
-python3 -m unittest -v
-python3 collector.py
-```
-
-The last command creates `publications.csv` in this folder. Open the CSV with a text editor or spreadsheet program. To choose a different date range:
-
-```bash
-python3 collector.py --since 2025-01-01 --until 2026-10-22 --output publications.csv
-```
-
-By default, "recent" means the 365 days through the day you run the program. The output includes a title, date, DOI, author names, source, work type, OpenAlex link, and topic hierarchy. OpenAlex may include book reviews, preprints, or other work types; the CSV is a discovery sample, not a vetted list of commercialization leads.
-
-## Read the code like a Java program
-
-1. `main()` reads command-line options, like a Java `main` method.
-2. `collect()` requests pages until it has 20 unique works.
-3. `fetch_page()` builds an API URL and turns JSON into Python dictionaries (similar to Java maps).
-4. `unique_works()` uses a `set` to remember DOIs; if a DOI is missing, it uses the OpenAlex ID.
-5. `to_row()` picks the fields for one spreadsheet row, and `write_csv()` writes them.
-
-`test_collector.py` checks those transformations using small fake records, so the tests do not need an internet connection. The collector itself does need internet access to fetch real publications. If it reports a network or HTTP error, check your connection and try again later. The unauthenticated OpenAlex API has a shared free budget, so a key may eventually be needed for larger work.
-
-`test_demo.py` checks that one click adds 20 unseen records, another click moves backward, and a fetch error does not change the saved CSV.
-
-## A focused two-hour session
-
-- **0–20 min:** Run the tests, then trace one test into `unique_works()`.
-- **20–50 min:** Run the collector and inspect three CSV rows against their OpenAlex links.
-- **50–80 min:** Change `--since`, rerun, and observe how the results change.
-- **80–110 min:** Add one field you want for research discovery, such as `cited_by_count`, and add a test for it.
-- **110–120 min:** Write down surprising records and one question for the Venture Studio client about what counts as a useful lead.
-
-Do not connect production university accounts or a shared Google Sheet during this exercise.
-
-## Sources
-
-- OpenAlex API: https://help.openalex.org/api/
-- OpenAlex paging: https://help.openalex.org/api/paging/
-- Lehigh institution page: https://openalex.org/institutions/I186143895
+To deploy a copy on [Streamlit Community Cloud](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy), select this repository and its `main` branch, then set `streamlit_app.py` as the entrypoint. The repository includes the seed CSV and `requirements.txt` needed to launch the app.
