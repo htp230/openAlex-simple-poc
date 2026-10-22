@@ -100,6 +100,27 @@ class StreamlitAppTests(unittest.TestCase):
         self.assertEqual(parsed, rows)
         self.assertEqual(len(parsed), 2)
 
+    def test_table_numbers_and_clickable_titles_grow_with_rows(self):
+        rows = [row(i) for i in range(1, 41)]
+        table = streamlit_app.render_table(rows)
+        self.assertEqual(table.count('target="_blank"'), 40)
+        self.assertIn('data-sort="1">1</td>', table)
+        self.assertIn('data-sort="40">40</td>', table)
+        self.assertIn('href="https://openalex.org/W40"', table)
+        self.assertIn('>Work 40</a>', table)
+        for column in range(8):
+            self.assertIn(f'data-column="{column}"', table)
+
+    def test_title_link_escapes_untrusted_text_and_url(self):
+        suspicious = row(1)
+        suspicious["title"] = '<img src=x onerror="alert(1)">'
+        suspicious["openalex_url"] = 'javascript:alert(1)'
+        table = streamlit_app.render_table([suspicious])
+        self.assertNotIn('<img src=x', table)
+        self.assertNotIn('href="javascript:', table)
+        self.assertIn('href="https://openalex.org/W1"', table)
+        self.assertIn('&lt;img src=x onerror=', table)
+
     def test_session_starts_from_seed_and_click_updates_table_and_download(self):
         st = self.fake_streamlit([False, True])
         new_rows = [row(i, "2026-10-14") for i in range(21, 41)]
@@ -110,7 +131,7 @@ class StreamlitAppTests(unittest.TestCase):
         self.assertEqual(st.metric.call_args_list[0].args, ("Total publications", 20))
         self.assertEqual(st.metric.call_args_list[1].args, ("Total publications", 40))
         self.assertEqual(len(st.session_state["publications"]), 40)
-        self.assertEqual(len(st.dataframe.call_args.args[0]), 40)
+        self.assertIn('data-sort="40">40</td>', st.iframe.call_args.args[0])
         download = st.download_button.call_args.kwargs["data"]
         self.assertEqual(len(list(csv.DictReader(io.StringIO(download.decode("utf-8-sig"))))), 40)
 
