@@ -42,6 +42,20 @@ def read_seed_rows(path=SEED_CSV):
     return rows
 
 
+def fill_seed_classifications(rows, seed_rows):
+    """Fill missing topic fields in sessions started before the seed was enriched."""
+    by_id = {row["openalex_id"].strip().lower(): row for row in seed_rows}
+    updated = []
+    for row in rows:
+        seed = by_id.get((row.get("openalex_id") or "").strip().lower())
+        if not seed:
+            updated.append(row)
+            continue
+        missing = {key: seed[key] for key in collector.TOPIC_HEADERS if not row.get(key)}
+        updated.append({**row, **missing} if missing else row)
+    return updated
+
+
 def next_older_rows(rows, batch_size=BATCH_SIZE):
     """Find up to batch_size unseen works on or before the oldest saved date.
 
@@ -264,12 +278,17 @@ def main():
     st.title("Lehigh research discovery")
     st.caption("Public OpenAlex works affiliated with Lehigh University")
 
+    try:
+        seed_rows = read_seed_rows()
+    except (OSError, ValueError) as exc:
+        st.error(f"Could not load the bundled publications: {exc}")
+        st.stop()
     if "publications" not in st.session_state:
-        try:
-            st.session_state["publications"] = read_seed_rows()
-        except (OSError, ValueError) as exc:
-            st.error(f"Could not load the bundled publications: {exc}")
-            st.stop()
+        st.session_state["publications"] = seed_rows
+    else:
+        st.session_state["publications"] = fill_seed_classifications(
+            st.session_state["publications"], seed_rows
+        )
 
     if st.button("Get next 20 older publications"):
         try:

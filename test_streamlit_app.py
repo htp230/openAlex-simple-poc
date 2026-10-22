@@ -45,6 +45,21 @@ class StreamlitAppTests(unittest.TestCase):
         self.assertEqual(rows[0]["field"], "Arts and Humanities")
         self.assertEqual(rows[0]["domain"], "Social Sciences")
 
+    def test_old_session_fills_seed_topics_without_changing_added_rows(self):
+        seed = streamlit_app.read_seed_rows()
+        old_session = [{key: value for key, value in item.items()
+                        if key not in collector.TOPIC_HEADERS} for item in seed]
+        old_session[0]["topic"] = ""
+        added = row(999, "2026-10-14")
+        added["topic"] = "Added work topic"
+        old_session.append(added)
+        filled = streamlit_app.fill_seed_classifications(old_session, seed)
+        self.assertEqual(len(filled), 21)
+        self.assertEqual(filled[0]["topic"], "Music History and Culture")
+        self.assertEqual(filled[0]["domain"], "Social Sciences")
+        self.assertEqual(filled[-1], added)
+        self.assertEqual(old_session[0]["topic"], "")
+
     def test_inclusive_cutoff_and_deduplication_by_id_and_doi(self):
         rows = [row(1, doi="10.1/old"), row(2)]
         candidates = [
@@ -169,6 +184,23 @@ class StreamlitAppTests(unittest.TestCase):
         self.assertEqual(len(st.session_state["publications"]), 20)
         st.error.assert_called_once()
         self.assertEqual(st.metric.call_args.args, ("Total publications", 20))
+
+    def test_existing_session_renders_and_exports_seed_classifications(self):
+        st = self.fake_streamlit([False])
+        seed = streamlit_app.read_seed_rows()
+        st.session_state["publications"] = [
+            {key: value for key, value in item.items() if key not in collector.TOPIC_HEADERS}
+            for item in seed
+        ] + [row(999, "2026-10-14")]
+        with patch.dict(sys.modules, {"streamlit": st}):
+            streamlit_app.main()
+        self.assertEqual(len(st.session_state["publications"]), 21)
+        self.assertEqual(st.session_state["publications"][0]["subfield"], "Music")
+        self.assertIn("Music History and Culture", st.iframe.call_args.args[0])
+        downloaded = list(csv.DictReader(io.StringIO(
+            st.download_button.call_args.kwargs["data"].decode("utf-8-sig"))))
+        self.assertEqual(downloaded[0]["field"], "Arts and Humanities")
+        self.assertEqual(downloaded[-1]["openalex_id"], "W999")
 
 
 if __name__ == "__main__":
