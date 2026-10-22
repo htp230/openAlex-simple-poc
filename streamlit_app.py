@@ -121,18 +121,29 @@ def render_table(rows):
 
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><style>
-body {{ margin: 0; font: 14px system-ui, sans-serif; color: #1f2937; }}
-.table-wrap {{ height: 610px; overflow: auto; border: 1px solid #dfe3e8; border-radius: 8px; }}
-table {{ border-collapse: collapse; width: 100%; min-width: 1050px; }}
-th {{ position: sticky; top: 0; z-index: 1; background: #f7f8fa; text-align: left; border-bottom: 1px solid #dfe3e8; }}
+:root {{ color-scheme: light; }}
+* {{ box-sizing: border-box; }}
+body {{ margin: 0; background: #fff; color: #182230; font: 14px/1.4 system-ui, sans-serif; }}
+.table-wrap {{ height: 610px; overflow: auto; background: #fff; border: 1px solid #d0d5dd; border-radius: 8px; }}
+table {{ width: 100%; min-width: 1580px; table-layout: fixed; border-collapse: collapse; background: #fff; }}
+th {{ position: sticky; top: 0; z-index: 1; background: #f1f5f9; color: #253047; text-align: left; border-bottom: 1px solid #cbd5e1; }}
 th button {{ width: 100%; padding: 12px; border: 0; background: none; color: inherit; font: inherit; font-weight: 650; text-align: left; cursor: pointer; white-space: nowrap; }}
-th button:hover, th button:focus-visible {{ background: #e9edf2; }}
-td {{ padding: 11px 12px; border-bottom: 1px solid #edf0f2; vertical-align: top; }}
-td:nth-child(1) {{ min-width: 42px; font-variant-numeric: tabular-nums; }}
-td:nth-child(2) {{ min-width: 300px; }}
-td:nth-child(4) {{ min-width: 180px; }}
-tr:hover td {{ background: #fafbfc; }}
-a {{ color: #6c122b; text-decoration: underline; }}
+th button:hover {{ background: #e6eef8; }}
+th button:focus-visible {{ outline: 2px solid #175cd3; outline-offset: -3px; }}
+td {{ padding: 11px 12px; background: #fff; color: #253047; border-bottom: 1px solid #e4e8ee; vertical-align: top; overflow-wrap: anywhere; }}
+tbody tr:nth-child(even) td {{ background: #f8fafc; }}
+tbody tr:hover td {{ background: #edf5ff; }}
+th:nth-child(1), td:nth-child(1) {{ width: 55px; font-variant-numeric: tabular-nums; }}
+th:nth-child(2), td:nth-child(2) {{ width: 430px; }}
+th:nth-child(3), td:nth-child(3) {{ width: 115px; white-space: nowrap; font-variant-numeric: tabular-nums; }}
+th:nth-child(4), td:nth-child(4) {{ width: 285px; }}
+th:nth-child(5), td:nth-child(5) {{ width: 210px; }}
+th:nth-child(6), td:nth-child(6) {{ width: 120px; }}
+th:nth-child(7), td:nth-child(7) {{ width: 215px; }}
+th:nth-child(8), td:nth-child(8) {{ width: 150px; white-space: nowrap; }}
+a {{ color: #175cd3; text-decoration: underline; text-underline-offset: 2px; }}
+a:visited {{ color: #6941c6; }}
+a:hover {{ color: #0b4ab8; }}
 </style></head><body>
 <div class="table-wrap"><table aria-label="Publications">
 <thead><tr>{headers}</tr></thead><tbody>{''.join(table_rows)}</tbody>
