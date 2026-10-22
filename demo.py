@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from collector import HEADERS, fetch_page, normalize_doi, to_row
+from collector import HEADERS, LEGACY_HEADERS, fetch_page, normalize_doi, to_row
 
 
 FOLDER = Path(__file__).resolve().parent
@@ -22,7 +22,7 @@ DEMO_CSV = FOLDER / "demo_publications.csv"
 def read_rows(path):
     with path.open(encoding="utf-8-sig", newline="") as file:
         reader = csv.DictReader(file)
-        if reader.fieldnames != list(HEADERS):
+        if reader.fieldnames not in (list(HEADERS), list(LEGACY_HEADERS)):
             raise ValueError(f"Unexpected CSV columns in {path.name}")
         return list(reader)
 

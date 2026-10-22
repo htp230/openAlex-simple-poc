@@ -20,9 +20,14 @@ TABLE_COLUMNS = (
     ("Authors", "authors"),
     ("Source", "source"),
     ("Type", "type"),
+    ("Topic", "topic"),
+    ("Subfield", "subfield"),
+    ("Field", "field"),
+    ("Domain", "domain"),
     ("DOI", "doi"),
     ("OpenAlex ID", "openalex_id"),
 )
+FILTERABLE_KEYS = {"type", "topic", "subfield", "field", "domain"}
 
 
 def read_seed_rows(path=SEED_CSV):
@@ -95,14 +100,37 @@ def openalex_link(row):
 
 
 def render_table(rows):
-    """Render a sortable, linked table without changing the saved CSV rows."""
-    headers = "".join(
-        f'<th scope="col" aria-sort="{"ascending" if index == 0 else "none"}">'
-        f'<button type="button" data-column="{index}" aria-label="Sort by {html.escape(label)}">'
-        f'{html.escape(label)} <span aria-hidden="true">{"↑" if index == 0 else "↕"}</span>'
-        "</button></th>"
-        for index, (label, _) in enumerate(TABLE_COLUMNS)
-    )
+    """Render a linked table with sorting and heading dropdown filters."""
+    headers = []
+    for index, (label, key) in enumerate(TABLE_COLUMNS):
+        escaped_label = html.escape(label)
+        sort_button = (
+            f'<button class="sort-button" type="button" data-column="{index}" '
+            f'aria-label="Sort by {escaped_label}" title="Sort by {escaped_label}">'
+            f'<span aria-hidden="true">{"↑" if index == 0 else "↕"}</span></button>'
+        )
+        if key in FILTERABLE_KEYS:
+            values = sorted({str(row.get(key) or "") for row in rows}, key=str.casefold)
+            options = ['<option value="all">All values</option>']
+            options.extend(
+                f'<option value="{number}" data-value="{html.escape(value, quote=True)}">'
+                f'{html.escape(value or "Unclassified")}</option>'
+                for number, value in enumerate(values)
+            )
+            heading = (
+                f'<button class="filter-trigger" type="button" data-column="{index}" '
+                f'aria-label="Filter {escaped_label}" aria-expanded="false">'
+                f'{escaped_label} <span aria-hidden="true">▾</span></button>'
+                f'<select class="filter-select" data-column="{index}" '
+                f'aria-label="Filter {escaped_label}" hidden>{"".join(options)}</select>'
+            )
+        else:
+            heading = f'<span class="plain-label">{escaped_label}</span>'
+        headers.append(
+            f'<th scope="col" aria-sort="{"ascending" if index == 0 else "none"}">'
+            f'<div class="header-control">{heading}{sort_button}</div></th>'
+        )
+    headers = "".join(headers)
     table_rows = []
     for number, row in enumerate(rows, start=1):
         cells = []
@@ -124,12 +152,20 @@ def render_table(rows):
 :root {{ color-scheme: light; }}
 * {{ box-sizing: border-box; }}
 body {{ margin: 0; background: #fff; color: #182230; font: 14px/1.4 system-ui, sans-serif; }}
-.table-wrap {{ height: 610px; overflow: auto; background: #fff; border: 1px solid #d0d5dd; border-radius: 8px; }}
-table {{ width: 100%; min-width: 1580px; table-layout: fixed; border-collapse: collapse; background: #fff; }}
+.table-tools {{ display: flex; align-items: center; gap: 12px; padding: 0 2px 9px; color: #475467; font-size: 13px; }}
+.clear-filters {{ border: 0; background: none; color: #175cd3; font: inherit; font-weight: 600; cursor: pointer; }}
+.table-wrap {{ height: 575px; overflow: auto; background: #fff; border: 1px solid #d0d5dd; border-radius: 8px; }}
+table {{ width: 100%; min-width: 2520px; table-layout: fixed; border-collapse: collapse; background: #fff; }}
 th {{ position: sticky; top: 0; z-index: 1; background: #f1f5f9; color: #253047; text-align: left; border-bottom: 1px solid #cbd5e1; }}
-th button {{ width: 100%; padding: 12px; border: 0; background: none; color: inherit; font: inherit; font-weight: 650; text-align: left; cursor: pointer; white-space: nowrap; }}
+.header-control {{ display: flex; align-items: center; min-height: 43px; flex-wrap: wrap; }}
+.plain-label {{ padding: 9px 0 9px 12px; font-weight: 650; }}
+th button {{ padding: 9px 5px; border: 0; background: none; color: inherit; font: inherit; font-weight: 650; text-align: left; cursor: pointer; white-space: nowrap; }}
+th .filter-trigger {{ padding-left: 12px; }}
+th .filter-trigger.active {{ color: #175cd3; }}
+th .sort-button {{ margin-left: auto; padding: 9px 12px; font-size: 16px; }}
+th select {{ width: calc(100% - 16px); margin: 0 8px 8px; padding: 6px; border: 1px solid #98a2b3; border-radius: 5px; background: #fff; color: #182230; font: inherit; }}
 th button:hover {{ background: #e6eef8; }}
-th button:focus-visible {{ outline: 2px solid #175cd3; outline-offset: -3px; }}
+th button:focus-visible, th select:focus-visible {{ outline: 2px solid #175cd3; outline-offset: -3px; }}
 td {{ padding: 11px 12px; background: #fff; color: #253047; border-bottom: 1px solid #e4e8ee; vertical-align: top; overflow-wrap: anywhere; }}
 tbody tr:nth-child(even) td {{ background: #f8fafc; }}
 tbody tr:hover td {{ background: #edf5ff; }}
@@ -139,22 +175,64 @@ th:nth-child(3), td:nth-child(3) {{ width: 115px; white-space: nowrap; font-vari
 th:nth-child(4), td:nth-child(4) {{ width: 285px; }}
 th:nth-child(5), td:nth-child(5) {{ width: 210px; }}
 th:nth-child(6), td:nth-child(6) {{ width: 120px; }}
-th:nth-child(7), td:nth-child(7) {{ width: 215px; }}
-th:nth-child(8), td:nth-child(8) {{ width: 150px; white-space: nowrap; }}
+th:nth-child(7), td:nth-child(7) {{ width: 245px; }}
+th:nth-child(8), td:nth-child(8) {{ width: 175px; }}
+th:nth-child(9), td:nth-child(9) {{ width: 185px; }}
+th:nth-child(10), td:nth-child(10) {{ width: 165px; }}
+th:nth-child(11), td:nth-child(11) {{ width: 215px; }}
+th:nth-child(12), td:nth-child(12) {{ width: 150px; white-space: nowrap; }}
 a {{ color: #175cd3; text-decoration: underline; text-underline-offset: 2px; }}
 a:visited {{ color: #6941c6; }}
 a:hover {{ color: #0b4ab8; }}
 </style></head><body>
+<div class="table-tools"><span id="visible-count">Showing {len(rows)} of {len(rows)} publications</span><button class="clear-filters" type="button" hidden>Clear filters</button></div>
 <div class="table-wrap"><table aria-label="Publications">
 <thead><tr>{headers}</tr></thead><tbody>{''.join(table_rows)}</tbody>
 </table></div>
 <script>
 const table = document.querySelector('table');
 const body = table.tBodies[0];
-const buttons = [...table.querySelectorAll('th button')];
+const buttons = [...table.querySelectorAll('.sort-button')];
 const collator = new Intl.Collator(undefined, {{numeric: true, sensitivity: 'base'}});
 let activeColumn = 0;
 let ascending = true;
+const filters = new Map();
+const visibleCount = document.querySelector('#visible-count');
+const clearFilters = document.querySelector('.clear-filters');
+function applyFilters() {{
+  let visible = 0;
+  for (const row of body.rows) {{
+    row.hidden = [...filters].some(([column, value]) => row.cells[column].dataset.sort !== value);
+    if (!row.hidden) visible++;
+  }}
+  visibleCount.textContent = `Showing ${{visible}} of ${{body.rows.length}} publications`;
+  clearFilters.hidden = filters.size === 0;
+}}
+for (const trigger of table.querySelectorAll('.filter-trigger')) {{
+  trigger.addEventListener('click', () => {{
+    const select = trigger.parentElement.querySelector('.filter-select');
+    select.hidden = !select.hidden;
+    trigger.setAttribute('aria-expanded', String(!select.hidden));
+    if (!select.hidden) select.focus();
+  }});
+}}
+for (const select of table.querySelectorAll('.filter-select')) {{
+  select.addEventListener('change', () => {{
+    const column = Number(select.dataset.column);
+    if (select.value === 'all') filters.delete(column);
+    else filters.set(column, select.selectedOptions[0].dataset.value);
+    select.parentElement.querySelector('.filter-trigger').classList.toggle('active', select.value !== 'all');
+    applyFilters();
+  }});
+}}
+clearFilters.addEventListener('click', () => {{
+  for (const select of table.querySelectorAll('.filter-select')) {{
+    select.value = 'all';
+    select.parentElement.querySelector('.filter-trigger').classList.remove('active');
+  }}
+  filters.clear();
+  applyFilters();
+}});
 for (const button of buttons) {{
   button.addEventListener('click', () => {{
     const column = Number(button.dataset.column);
@@ -170,9 +248,9 @@ for (const button of buttons) {{
     }});
     body.replaceChildren(...sorted);
     for (const header of table.tHead.rows[0].cells) {{
-      const selected = Number(header.querySelector('button').dataset.column) === column;
+      const selected = Number(header.querySelector('.sort-button').dataset.column) === column;
       header.setAttribute('aria-sort', selected ? (ascending ? 'ascending' : 'descending') : 'none');
-      header.querySelector('span').textContent = selected ? (ascending ? '↑' : '↓') : '↕';
+      header.querySelector('.sort-button span').textContent = selected ? (ascending ? '↑' : '↓') : '↕';
     }}
   }});
 }}

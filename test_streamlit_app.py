@@ -15,6 +15,7 @@ def row(number, published="2026-10-15", doi=""):
         "publication_date": published, "doi": doi, "authors": "",
         "source": "", "type": "article",
         "openalex_url": f"https://openalex.org/W{number}",
+        "topic": "", "subfield": "", "field": "", "domain": "",
     }
 
 
@@ -39,6 +40,10 @@ class StreamlitAppTests(unittest.TestCase):
         self.assertEqual(len(rows), 20)
         self.assertEqual(list(rows[0]), list(collector.HEADERS))
         self.assertEqual(rows[0]["openalex_id"], "W7223134565")
+        self.assertEqual(rows[0]["topic"], "Music History and Culture")
+        self.assertEqual(rows[0]["subfield"], "Music")
+        self.assertEqual(rows[0]["field"], "Arts and Humanities")
+        self.assertEqual(rows[0]["domain"], "Social Sciences")
 
     def test_inclusive_cutoff_and_deduplication_by_id_and_doi(self):
         rows = [row(1, doi="10.1/old"), row(2)]
@@ -108,8 +113,29 @@ class StreamlitAppTests(unittest.TestCase):
         self.assertIn('data-sort="40">40</td>', table)
         self.assertIn('href="https://openalex.org/W40"', table)
         self.assertIn('>Work 40</a>', table)
-        for column in range(8):
+        for column in range(len(streamlit_app.TABLE_COLUMNS)):
             self.assertIn(f'data-column="{column}"', table)
+
+    def test_heading_dropdowns_include_values_and_unclassified(self):
+        first = row(1)
+        first.update(type="book-review", topic="Music History and Culture", subfield="Music",
+                     field="Arts and Humanities", domain="Social Sciences")
+        second = row(2)
+        table = streamlit_app.render_table([first, second])
+        for label in ("Type", "Topic", "Subfield", "Field", "Domain"):
+            self.assertIn(f'aria-label="Filter {label}"', table)
+        self.assertEqual(table.count('class="filter-select"'), 5)
+        self.assertIn('>Music History and Culture</option>', table)
+        self.assertIn('>Unclassified</option>', table)
+        self.assertIn("row.cells[column].dataset.sort !== value", table)
+        self.assertIn("Showing ${visible} of ${body.rows.length} publications", table)
+
+    def test_filter_options_escape_openalex_text(self):
+        suspicious = row(1)
+        suspicious["topic"] = '<img src=x onerror="alert(1)">'
+        table = streamlit_app.render_table([suspicious])
+        self.assertNotIn('<img src=x', table)
+        self.assertIn('&lt;img src=x onerror=', table)
 
     def test_title_link_escapes_untrusted_text_and_url(self):
         suspicious = row(1)

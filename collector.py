@@ -18,7 +18,9 @@ from urllib.request import Request, urlopen
 
 API_URL = "https://api.openalex.org/works"
 LEHIGH_ID = "I186143895"
-HEADERS = ("openalex_id", "title", "publication_date", "doi", "authors", "source", "type", "openalex_url")
+LEGACY_HEADERS = ("openalex_id", "title", "publication_date", "doi", "authors", "source", "type", "openalex_url")
+TOPIC_HEADERS = ("topic", "subfield", "field", "domain")
+HEADERS = LEGACY_HEADERS + TOPIC_HEADERS
 
 
 def normalize_doi(value):
@@ -54,6 +56,7 @@ def to_row(work):
     authors = [entry.get("author", {}).get("display_name", "") for entry in work.get("authorships") or []]
     location = work.get("primary_location") or {}
     source = location.get("source") or {}
+    topic = work.get("primary_topic") or {}
     return {
         "openalex_id": (work.get("id") or "").rsplit("/", 1)[-1],
         "title": work.get("title") or "",
@@ -63,6 +66,10 @@ def to_row(work):
         "source": source.get("display_name") or "",
         "type": work.get("type") or "",
         "openalex_url": work.get("id") or "",
+        "topic": topic.get("display_name") or "",
+        "subfield": (topic.get("subfield") or {}).get("display_name") or "",
+        "field": (topic.get("field") or {}).get("display_name") or "",
+        "domain": (topic.get("domain") or {}).get("display_name") or "",
     }
 
 
@@ -77,7 +84,7 @@ def fetch_page(since, until, page, page_size=50):
         "sort": "publication_date:desc",
         "per_page": page_size,
         "page": page,
-        "select": "id,doi,title,publication_date,type,authorships,primary_location",
+        "select": "id,doi,title,publication_date,type,authorships,primary_location,primary_topic",
     }
     request = Request(f"{API_URL}?{urlencode(params)}", headers={"User-Agent": "lehigh-venture-studio-poc/0.1"})
     # The python.org macOS installer sometimes lacks its CA bundle; use the

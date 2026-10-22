@@ -23,6 +23,18 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual(row["openalex_id"], "W1")
         self.assertEqual(row["authors"], "")
         self.assertEqual(row["source"], "")
+        self.assertEqual([row[key] for key in collector.TOPIC_HEADERS], ["", "", "", ""])
+
+    def test_row_reads_primary_topic_hierarchy(self):
+        work = {"id": "https://openalex.org/W1", "primary_topic": {
+            "display_name": "Music History and Culture",
+            "subfield": {"display_name": "Music"},
+            "field": {"display_name": "Arts and Humanities"},
+            "domain": {"display_name": "Social Sciences"},
+        }}
+        row = collector.to_row(work)
+        self.assertEqual([row[key] for key in collector.TOPIC_HEADERS], [
+            "Music History and Culture", "Music", "Arts and Humanities", "Social Sciences"])
 
     def test_collect_pages_until_20_unique(self):
         first = [{"id": f"https://openalex.org/W{i}", "doi": None} for i in range(19)]

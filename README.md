@@ -11,7 +11,7 @@ python3 -m pip install -r requirements.txt
 python3 -m streamlit run streamlit_app.py
 ```
 
-The app starts each visitor's session with the 20 bundled records in `publications.csv`. It shows the total and a table numbered from 1 through the current count. Click any column heading to sort; click it again to reverse the order. Publication titles link to their OpenAlex pages. **Get next 20 older publications** fetches up to 20 unseen OpenAlex works dated on or before the oldest saved date, excluding matches by either OpenAlex ID or DOI. **Download CSV** exports that session's entire current list. The app does not write results to the server's filesystem. A browser reload or disconnected session can reset the list, so download it before leaving.
+The app starts each visitor's session with the 20 bundled records in `publications.csv`. It shows the total and a table numbered from 1 through the current count. Use the arrow in any column heading to sort, and click it again to reverse the order. Click **Type**, **Topic**, **Subfield**, **Field**, or **Domain** to open a dropdown filter; filters can be combined, and **Clear filters** restores the full table. The four classification columns come from each work's `primary_topic` in OpenAlex. Publication titles link to their OpenAlex pages. **Get next 20 older publications** fetches up to 20 unseen OpenAlex works dated on or before the oldest saved date, excluding matches by either OpenAlex ID or DOI. **Download CSV** exports that session's entire current list. The app does not write results to the server's filesystem. A browser reload or disconnected session can reset the list, so download it before leaving.
 
 To deploy on [Streamlit Community Cloud](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy), put `streamlit_app.py`, `collector.py`, `publications.csv`, and `requirements.txt` in the same GitHub repository. In Community Cloud, create an app from that repository and branch, and select `streamlit_app.py` as the entrypoint. The bundled CSV supplies the initial rows; clicking the button needs internet access to OpenAlex. No university account, Google Sheet, or server-side CSV storage is needed.
 
@@ -53,7 +53,7 @@ The last command creates `publications.csv` in this folder. Open the CSV with a 
 python3 collector.py --since 2025-01-01 --until 2026-10-22 --output publications.csv
 ```
 
-By default, "recent" means the 365 days through the day you run the program. The output includes a title, date, DOI, author names, source, work type, and OpenAlex link. OpenAlex may include book reviews, preprints, or other work types; the CSV is a discovery sample, not a vetted list of commercialization leads.
+By default, "recent" means the 365 days through the day you run the program. The output includes a title, date, DOI, author names, source, work type, OpenAlex link, and topic hierarchy. OpenAlex may include book reviews, preprints, or other work types; the CSV is a discovery sample, not a vetted list of commercialization leads.
 
 ## Read the code like a Java program
 
