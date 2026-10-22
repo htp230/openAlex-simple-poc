@@ -9,6 +9,14 @@ import collector
 import streamlit_app
 
 
+class RerunRequested(Exception):
+    pass
+
+
+class StopRequested(Exception):
+    pass
+
+
 def row(number, published="2026-10-15", doi=""):
     return {
         "openalex_id": f"W{number}", "title": f"Work {number}",
@@ -33,6 +41,11 @@ class StreamlitAppTests(unittest.TestCase):
         st.session_state = {}
         st.button.side_effect = button_results
         st.spinner.return_value = nullcontext()
+        st.components.v2.component.return_value.return_value.snapshot = {
+            "status": "ready", "payload": None,
+        }
+        st.rerun.side_effect = RerunRequested
+        st.stop.side_effect = StopRequested
         return st
 
     def test_seed_has_original_20_rows(self):
@@ -59,6 +72,16 @@ class StreamlitAppTests(unittest.TestCase):
         self.assertEqual(filled[0]["domain"], "Social Sciences")
         self.assertEqual(filled[-1], added)
         self.assertEqual(old_session[0]["topic"], "")
+
+    def test_browser_snapshot_restores_40_added_rows_and_skips_duplicates(self):
+        seed = streamlit_app.read_seed_rows()
+        added = [row(i, "2026-10-14") for i in range(100, 140)]
+        payload = {"version": 1, "added": added + [added[0], row(999, "bad-date")]}
+        restored = streamlit_app.restore_browser_rows(seed, payload)
+        self.assertEqual(len(restored), 60)
+        self.assertEqual(restored[20]["openalex_id"], "W100")
+        self.assertEqual(restored[-1]["openalex_id"], "W139")
+        self.assertEqual(len(streamlit_app.added_rows(restored, seed)), 40)
 
     def test_inclusive_cutoff_and_deduplication_by_id_and_doi(self):
         rows = [row(1, doi="10.1/old"), row(2)]
@@ -167,6 +190,8 @@ class StreamlitAppTests(unittest.TestCase):
         new_rows = [row(i, "2026-10-14") for i in range(21, 41)]
         with patch.dict(sys.modules, {"streamlit": st}), \
              patch.object(streamlit_app, "next_older_rows", return_value=new_rows):
+            with self.assertRaises(RerunRequested):
+                streamlit_app.main()
             streamlit_app.main()
             streamlit_app.main()
         self.assertEqual(st.metric.call_args_list[0].args, ("Total publications", 20))
@@ -180,6 +205,8 @@ class StreamlitAppTests(unittest.TestCase):
         st = self.fake_streamlit([True])
         with patch.dict(sys.modules, {"streamlit": st}), \
              patch.object(streamlit_app, "next_older_rows", side_effect=RuntimeError("offline")):
+            with self.assertRaises(RerunRequested):
+                streamlit_app.main()
             streamlit_app.main()
         self.assertEqual(len(st.session_state["publications"]), 20)
         st.error.assert_called_once()
@@ -201,6 +228,46 @@ class StreamlitAppTests(unittest.TestCase):
             st.download_button.call_args.kwargs["data"].decode("utf-8-sig"))))
         self.assertEqual(downloaded[0]["field"], "Arts and Humanities")
         self.assertEqual(downloaded[-1]["openalex_id"], "W999")
+
+    def test_reload_restores_60_from_same_browser(self):
+        seed = streamlit_app.read_seed_rows()
+        saved = [row(i, "2026-10-14") for i in range(100, 140)]
+        st = self.fake_streamlit([False])
+        st.components.v2.component.return_value.return_value.snapshot = {
+            "status": "ready", "payload": {"version": 1, "added": saved},
+        }
+        with patch.dict(sys.modules, {"streamlit": st}):
+            with self.assertRaises(RerunRequested):
+                streamlit_app.main()
+            streamlit_app.main()
+        self.assertEqual(len(st.session_state["publications"]), 60)
+        self.assertEqual(st.metric.call_args.args, ("Total publications", 60))
+        saved_again = st.components.v2.component.return_value.call_args.kwargs["data"]
+        self.assertEqual(saved_again["mode"], "save")
+        self.assertEqual(len(saved_again["added"]), 40)
+        self.assertEqual(len(streamlit_app.added_rows(st.session_state["publications"], seed)), 40)
+
+    def test_each_click_saves_the_new_batch(self):
+        st = self.fake_streamlit([True, True])
+        st.session_state["publications"] = streamlit_app.read_seed_rows()
+        batches = [[row(i, "2026-10-14") for i in range(100, 120)],
+                   [row(i, "2026-10-13") for i in range(120, 140)]]
+        with patch.dict(sys.modules, {"streamlit": st}), \
+             patch.object(streamlit_app, "next_older_rows", side_effect=batches):
+            streamlit_app.main()
+            streamlit_app.main()
+        save_calls = st.components.v2.component.return_value.call_args_list
+        self.assertEqual([len(call.kwargs["data"]["added"]) for call in save_calls], [20, 40])
+        self.assertEqual(len(st.session_state["publications"]), 60)
+
+    def test_waits_for_browser_snapshot_before_initializing(self):
+        st = self.fake_streamlit([])
+        st.components.v2.component.return_value.return_value.snapshot = None
+        with patch.dict(sys.modules, {"streamlit": st}):
+            with self.assertRaises(StopRequested):
+                streamlit_app.main()
+        self.assertNotIn("publications", st.session_state)
+        st.button.assert_not_called()
 
 
 if __name__ == "__main__":

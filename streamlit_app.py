@@ -4,6 +4,7 @@ import csv
 import html
 import io
 import re
+from datetime import date
 from pathlib import Path
 
 import collector
@@ -28,6 +29,27 @@ TABLE_COLUMNS = (
     ("OpenAlex ID", "openalex_id"),
 )
 FILTERABLE_KEYS = {"type", "topic", "subfield", "field", "domain"}
+BROWSER_STORAGE_JS = """
+const STORAGE_KEY = 'openalex-simple-poc:publications:v1';
+export default function({data, setStateValue}) {
+  try {
+    if (data.mode === 'load') {
+      const saved = window.localStorage.getItem(STORAGE_KEY);
+      setStateValue('snapshot', {
+        status: 'ready',
+        payload: saved === null ? null : JSON.parse(saved)
+      });
+    } else if (data.mode === 'save') {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        version: 1,
+        added: data.added
+      }));
+    }
+  } catch (error) {
+    setStateValue('snapshot', {status: 'unavailable'});
+  }
+}
+"""
 
 
 def read_seed_rows(path=SEED_CSV):
@@ -54,6 +76,47 @@ def fill_seed_classifications(rows, seed_rows):
         missing = {key: seed[key] for key in collector.TOPIC_HEADERS if not row.get(key)}
         updated.append({**row, **missing} if missing else row)
     return updated
+
+
+def added_rows(rows, seed_rows):
+    """Store only fetched works so bundled seed updates remain authoritative."""
+    seed_ids = {row["openalex_id"].strip().lower() for row in seed_rows}
+    return [row for row in rows if row["openalex_id"].strip().lower() not in seed_ids]
+
+
+def restore_browser_rows(seed_rows, payload):
+    """Restore valid saved works after the bundled 20, skipping duplicates."""
+    rows = list(seed_rows)
+    if not isinstance(payload, dict) or payload.get("version") != 1:
+        return rows
+    saved = payload.get("added")
+    if not isinstance(saved, list):
+        return rows
+    seen_ids = {row["openalex_id"].strip().lower() for row in rows}
+    seen_dois = {collector.normalize_doi(row["doi"]) for row in rows if row["doi"]}
+    for item in saved:
+        if not isinstance(item, dict):
+            continue
+        row = {key: item.get(key) if isinstance(item.get(key), str) else ""
+               for key in collector.HEADERS}
+        work_id = row["openalex_id"].strip().upper()
+        try:
+            date.fromisoformat(row["publication_date"])
+        except ValueError:
+            continue
+        if not re.fullmatch(r"W\d+", work_id):
+            continue
+        doi = collector.normalize_doi(row["doi"])
+        if work_id.lower() in seen_ids or (doi and doi in seen_dois):
+            continue
+        row["openalex_id"] = work_id
+        row["doi"] = doi
+        row["openalex_url"] = f"https://openalex.org/{work_id}"
+        seen_ids.add(work_id.lower())
+        if doi:
+            seen_dois.add(doi)
+        rows.append(row)
+    return rows
 
 
 def next_older_rows(rows, batch_size=BATCH_SIZE):
@@ -283,8 +346,26 @@ def main():
     except (OSError, ValueError) as exc:
         st.error(f"Could not load the bundled publications: {exc}")
         st.stop()
+    browser_storage = st.components.v2.component(
+        "openalex_browser_publications", js=BROWSER_STORAGE_JS
+    )
     if "publications" not in st.session_state:
-        st.session_state["publications"] = seed_rows
+        result = browser_storage(
+            data={"mode": "load"}, key="browser_publications",
+            on_snapshot_change=lambda: None,
+        )
+        snapshot = result.snapshot
+        if snapshot is None:
+            st.info("Restoring publications saved in this browser...")
+            st.stop()
+        if isinstance(snapshot, dict) and snapshot.get("status") == "ready":
+            st.session_state["publications"] = restore_browser_rows(
+                seed_rows, snapshot.get("payload")
+            )
+        else:
+            st.session_state["publications"] = seed_rows
+            st.session_state["browser_storage_unavailable"] = True
+        st.rerun()
     else:
         st.session_state["publications"] = fill_seed_classifications(
             st.session_state["publications"], seed_rows
@@ -304,6 +385,14 @@ def main():
                 st.info("No more unseen publications were found.")
 
     rows = st.session_state["publications"]
+    result = browser_storage(
+        data={"mode": "save", "added": added_rows(rows, seed_rows)},
+        key="browser_publications", on_snapshot_change=lambda: None,
+    )
+    if (st.session_state.get("browser_storage_unavailable") or
+            isinstance(result.snapshot, dict) and
+            result.snapshot.get("status") == "unavailable"):
+        st.warning("This browser is blocking saved publications. Download the CSV to keep your list.")
     st.metric("Total publications", len(rows))
     st.download_button(
         "Download CSV",
